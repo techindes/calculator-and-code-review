@@ -190,8 +190,9 @@ Python snippet in this Markdown document, counting from the beginning of
 the document.
 
 **Recommendation: Request changes.** The main blockers are unsafe SQL
-construction, a predictable fallback secret, missing upsert behavior, and
-incomplete validation and error handling.
+construction, a predictable fallback secret, missing upsert behavior, a
+missing vendor check, and incomplete validation and error handling. The
+vendor's signing scheme is also weak and should be raised with them.
 
 ### 1. SQL injection in both database inserts
 
@@ -263,6 +264,13 @@ validation rules, and a role permitted by the integration contract.
 Define required fields and defaults explicitly. If metadata is provided,
 validate its agreed shape as well.
 
+The task says these events are about users who are vendors, but the
+handler never reads `metadata`, so `metadata.source` is never checked.
+Any signed event creates or changes a user, whatever its source. Confirm
+the intended rule with the vendor contract; if only vendor users may be
+managed, reject events whose `metadata.source` is not `"vendor"` before
+any write.
+
 Authentication establishes who sent a message; authorization determines
 what that sender may change. Confirm which users and roles this vendor
 may manage. The example explicitly includes `"admin"`, so accepting that
@@ -290,9 +298,17 @@ This is security hardening; a practical remote timing exploit has not
 been demonstrated here.
 
 Using `compare_digest` does not change the signing algorithm to HMAC.
-The vendor specifies `SHA256(secret + body)`. A move to a standard
-construction such as HMAC-SHA256 requires agreement with the vendor;
-do not silently change the protocol.
+The vendor specifies `SHA256(secret + body)`, which is a weak
+construction: SHA-256 is vulnerable to length extension, so anyone who
+sees one valid body and signature can compute a valid signature for that
+body with extra bytes appended, without knowing the secret. In this
+handler the forged body would contain SHA-256 padding bytes, which are
+not valid UTF-8 and leave trailing data after the JSON object, so the
+request would fail rather than be processed; a more lenient decoder or
+parser could change that. Raise this with the vendor and recommend
+HMAC-SHA256, which is designed to prevent it.
+A move to HMAC requires agreement with the vendor; do not silently
+change the protocol.
 
 ### 6. Guarantee transaction rollback and connection cleanup
 
@@ -418,17 +434,34 @@ cleanup, and that errors do not expose sensitive data.
 
 ### My approach
 
-I chose the Python implementation and worked through the review in two
-stages: understanding the request flow, then evaluating correctness,
-security, and failure handling. Flask was unfamiliar to me, so I first
-used AI as a tutor. I wanted to understand the code before using its
-review suggestions.
+I set the direction of the review and made the key decisions about what
+it should cover. The AI did the line-by-line analysis, ran isolated
+checks, and drafted the comments under that direction. I worked in two
+stages: first understanding the request flow and the database layer,
+then evaluating correctness, security, and failure handling.
 
-I directed the scope, asked for simpler explanations where needed, and
-explicitly prioritized cybersecurity and error handling. AI supplied the
-technical analysis, ran isolated checks, and drafted the code comments.
-I kept the deliverable focused on reviewing the supplied implementation
-rather than rewriting it.
+The decisions I made:
+
+- **Python over PHP.** I chose to review the Python version.
+- **Understand the system before judging it.** Flask was new to me, so
+  before asking for findings I worked through routing, the request
+  lifecycle, and the database API: connections, cursors, `execute()`,
+  parameterized queries, commits, and rollbacks. That groundwork is what
+  let me evaluate the SQL injection and upsert findings rather than
+  repeat them.
+- **Security and failure handling first.** I directed the review to
+  prioritize cybersecurity and error handling over style, because this
+  endpoint accepts external input and writes to the user table.
+- **No finding without a concrete consequence.** I required each issue
+  to be explained with a real example, such as an apostrophe breaking
+  the SQL or a repeated insert failing instead of updating, before it
+  went into the review.
+- **Review comments, not a rewrite.** When a rewrite was offered, I chose
+  review comments, because the task is a code review.
+- **A second check against the requirements.** Before submitting, I had
+  the review checked against the task again. That added two points: the
+  code never checks that users are vendors, and the vendor's signing
+  scheme is vulnerable to length extension.
 
 ### Prompts, AI outputs, and follow-up decisions
 
@@ -584,7 +617,11 @@ backend code.
 
 **Repository:** https://github.com/techindes/calculator-and-code-review
 
-**Time spent:** About 50 minutes.
+**Time spent:** About 50 minutes. I spent that time steering the AI:
+making the decisions, reviewing its output, and redirecting it, rather
+than writing code by hand. That is how I work with AI in my current job,
+and it is why the amount of code and tests is larger than 50 minutes of
+hand-written work would produce.
 
 #### 1. How far did I get?
 
@@ -658,6 +695,36 @@ What I did not do or verify:
 
 #### 4. AI use
 
+I made the architecture and engineering decisions; the AI wrote the
+implementation to them, and I reviewed and redirected its output. The
+decisions I made:
+
+- **Backend first.** My first prompt asked for a backend plan before any
+  frontend work, so the calculation logic and API were built and tested
+  on their own before a UI depended on them.
+- **Numerical correctness as a requirement.** I raised the arithmetic
+  approach before any code was written, asking whether Python's `math`
+  library was the best way to make the calculator correct. Evaluating
+  that question led to `Decimal` with numbers kept as strings end to
+  end, which is why `0.1 + 0.2` returns `0.3` and large integers are not
+  rounded by JavaScript.
+- **Stack and scope.** I chose Python and Flask for the backend and
+  limited the calculator to the four basic operations.
+- **End-to-end testing and security.** I required end-to-end testing and
+  a security pass once the frontend was built, rather than stopping at
+  "it works". That is why the app is tested in real browsers against the
+  real backend, and those tests caught real bugs, such as long results
+  shifting the keypad.
+- **Threat model.** When security came up, I set the scope as a local
+  demo rather than a public deployment, which decided which protections
+  were in scope (input validation, request limits, Host checks, CSP) and
+  which were not (HTTPS, rate limiting).
+- **Reviewing the changes.** I had it list every file it changed so I
+  could review the changes themselves rather than trust a summary.
+- **Holding the scope.** When the testing and documentation grew beyond
+  what the exercise needed, I pulled the work back to the assignment's
+  deliverables, and later had the README cut down.
+
 **All of my prompts, in order** (typos are mine and left as written):
 
 1. > lets focus on part 2 of the intervuiiew - make a plan for the intyerview , please make a plan for the backend first , is it more wise tonsue the bmath linbrqayr or whast teh best way to get the calultor to work perfectly
@@ -673,12 +740,23 @@ What I did not do or verify:
 8. > wiat this is for an inetrview and  i need to push ths so how do i do tihs and did you fill in teh inetrviuew quesi0tns
 9. > io thinkm you made evrytong worke, the main port fo this exercisue was to copkeplte teh onerviuew questiosn we needed to focus on thst and it sghould just follow the instructions of teh assignment
 10. > THis is a job interview quewstion and i want you to look at it and make sure evryhting is perfcet beifore i pouhs and make this rpoe adn giev the link
+11. In a separate review session, I pasted the recruiter's email and asked
+    the AI to check everything against the assignment and tell me which
+    answers I needed to change.
+12. > Yes, add the length-extension and vendor-check points to the code review, clean up the README and validation report, and show me the diff before pushing. I'll give you my real time spent.
 
-The AI's outputs were long, so I am not pasting them verbatim. They are
-the code and documentation in the repository, with the README's "Part 2
-AI assistance record" summarizing the planning and implementation steps.
-For the last prompt, the AI reran the tests, fixed outdated notes, and
-published this repository.
+The AI's outputs were long, so I am not pasting them verbatim. In summary:
+
+- **Prompts 1-2:** compared approaches, recommended `Decimal` with string
+  values over `math` or floats, and planned a backend-first Flask design.
+- **Prompt 3:** built and tested the calculation module, then the API.
+- **Prompts 4-6:** planned and built the frontend, browser tests and
+  security headers, after I chose a local-demo scope.
+- **Prompts 7-10:** listed the changed files, filled in these answers when
+  I pointed out they were missing, reran the tests and published the repo.
+- **Prompts 11-12:** added two missing code-review points (the vendor
+  check and SHA-256 length extension), and cut the README down to what
+  the assignment needs.
 
 **What the AI did well**
 
