@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Calculator</title>
+  <link rel="icon" href="{{ url_for('static', filename='icons/calculator.svg') }}" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ url_for('static', filename='calculator.css') }}">
+  <script src="{{ url_for('static', filename='calculator.js') }}" defer></script>
+</head>
+<body>
+  <main class="workspace">
+    <header class="heading">
+      <img src="{{ url_for('static', filename='icons/calculator.svg') }}" width="24" height="24" alt="">
+      <h1>Calculator</h1>
+    </header>
+    <section class="calculator" aria-label="Calculator">
+      <div class="display" aria-busy="false">
+        <p id="expression" class="expression" aria-label="Expression">&nbsp;</p>
+        <output id="result" class="result" aria-label="Result" aria-live="off">0</output>
+      </div>
+      <p id="status" class="status" role="status" aria-live="polite" aria-atomic="true"><span id="status-text"></span></p>
+      <div id="keypad" class="keypad">
+        <button type="button" data-action="clear" class="utility clear" aria-label="Clear all" title="Clear all">AC</button>
+        <button type="button" data-action="sign" class="utility" aria-label="Change sign" title="Change sign">&plusmn;</button>
+        <button type="button" data-action="backspace" class="utility" aria-label="Backspace" title="Backspace"><img src="{{ url_for('static', filename='icons/delete.svg') }}" width="24" height="24" alt=""></button>
+        <button type="button" data-operator="/" class="operator" aria-label="Divide" aria-pressed="false" title="Divide">&divide;</button>
+        <button type="button" data-digit="7">7</button>
+        <button type="button" data-digit="8">8</button>
+        <button type="button" data-digit="9">9</button>
+        <button type="button" data-operator="*" class="operator" aria-label="Multiply" aria-pressed="false" title="Multiply">&times;</button>
+        <button type="button" data-digit="4">4</button>
+        <button type="button" data-digit="5">5</button>
+        <button type="button" data-digit="6">6</button>
+        <button type="button" data-operator="-" class="operator" aria-label="Subtract" aria-pressed="false" title="Subtract">&minus;</button>
+        <button type="button" data-digit="1">1</button>
+        <button type="button" data-digit="2">2</button>
+        <button type="button" data-digit="3">3</button>
+        <button type="button" data-operator="+" class="operator" aria-label="Add" aria-pressed="false" title="Add">+</button>
+        <button type="button" data-digit="0" class="zero">0</button>
+        <button type="button" data-action="decimal" aria-label="Decimal point" title="Decimal point">.</button>
+        <button type="button" data-action="equals" class="equals" aria-label="Equals" title="Equals">=</button>
+      </div>
+    </section>
+    <noscript>JavaScript is required to use this calculator.</noscript>
+  </main>
+</body>
+</html>
